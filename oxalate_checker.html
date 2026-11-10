@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sodium Oxalate Unknown – Result Checker</title>
+<style>
+  :root {
+    --ink: #2d3b45; --muted: #5b6b77; --line: #c7cdd1; --bg: #f5f6f7;
+    --accent: #0770a3; --good: #0b874b; --warn: #b45309; --bad: #c62828;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px 16px; background: #fff; color: var(--ink);
+    font: 16px/1.5 "Lato", "Helvetica Neue", Arial, sans-serif;
+  }
+  .card { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.95rem; }
+  label { display: block; font-weight: 700; margin: 16px 0 6px; }
+  .hint { font-weight: 400; color: var(--muted); font-size: 0.875rem; }
+  select, input {
+    width: 100%; padding: 10px 12px; font-size: 1rem; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 6px; background: #fff;
+  }
+  select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button {
+    margin-top: 20px; width: 100%; padding: 12px; font-size: 1rem; font-weight: 700;
+    color: #fff; background: var(--accent); border: 0; border-radius: 6px; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.08); }
+  #result { margin-top: 24px; }
+  .box { background: var(--bg); border-radius: 8px; padding: 16px 18px; margin-bottom: 12px; }
+  .big { font-size: 2rem; font-weight: 700; margin: 2px 0 4px; }
+  .row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; }
+  .row span:first-child { color: var(--muted); }
+  .note { border-left: 4px solid var(--warn); background: #fff7ed; }
+  .note.ok { border-left-color: var(--good); background: #effaf3; }
+  .note.err { border-left-color: var(--bad); background: #fdecec; }
+  .note h3 { margin: 0 0 6px; font-size: 1rem; }
+  .note p { margin: 0 0 6px; }
+  .note p:last-child { margin-bottom: 0; }
+  .formula { font-family: Georgia, "Times New Roman", serif; font-style: italic; }
+  .good { color: var(--good); } .ok { color: var(--warn); } .bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Sodium Oxalate Unknown: Check Your Result</h1>
+  <p class="sub">Practice day. Enter your result to see how close you came to the actual value.</p>
+
+  <div id="nojs" class="box note err">
+    <h3>The checker can't run here</h3>
+    <p>This view is blocking the page's code, so the Check button won't work. Ask your instructor for a working link.</p>
+  </div>
+
+  <form id="f" novalidate>
+    <label for="unk">Unknown number</label>
+    <select id="unk" required>
+      <option value="">Select your unknown…</option>
+      <option value="1">Unknown 1</option>
+      <option value="2">Unknown 2</option>
+      <option value="3">Unknown 3</option>
+      <option value="4">Unknown 4</option>
+      <option value="5">Unknown 5</option>
+      <option value="6">Unknown 6</option>
+      <option value="7">Unknown 7</option>
+      <option value="8">Unknown 8</option>
+      <option value="9">Unknown 9</option>
+      <option value="10">Unknown 10</option>
+      <option value="11">Unknown 11</option>
+      <option value="12">Unknown 12</option>
+      <option value="13">Unknown 13</option>
+      <option value="14">Unknown 14</option>
+      <option value="15">Unknown 15</option>
+      <option value="16">Unknown 16</option>
+      <option value="17">Unknown 17</option>
+      <option value="18">Unknown 18</option>
+    </select>
+
+    <label for="val">Your mass percent of Na<sub>2</sub>C<sub>2</sub>O<sub>4</sub> <span class="hint">(e.g. 23.45)</span></label>
+    <input id="val" type="number" step="any" inputmode="decimal" required>
+
+    <label for="pe">Your percent error <span class="hint">(optional: enter it to check your calculation)</span></label>
+    <input id="pe" type="number" step="any" inputmode="decimal">
+
+    <button type="submit">Check my result</button>
+  </form>
+
+  <div id="result" aria-live="polite"></div>
+</div>
+
+<script>
+(function () {
+  // Actual % mass Na2C2O4 for unknowns 1–18
+  var ACTUAL = {
+     1: 24.51,  2: 24.35,  3: 23.58,  4: 23.15,  5: 22.16,  6: 20.93,
+     7: 24.51,  8: 24.35,  9: 23.58, 10: 23.15, 11: 22.16, 12: 20.93,
+    13: 24.51, 14: 24.35, 15: 23.58, 16: 23.15, 17: 22.16, 18: 20.93
+  };
+
+  // Molar masses (g/mol)
+  var MM_NA2C2O4 = 2 * 22.990 + 2 * 12.011 + 4 * 15.999; // 133.998
+  var MM_C2O4    = 2 * 12.011 + 4 * 15.999;              //  88.018
+  var ION_RATIO  = MM_C2O4 / MM_NA2C2O4;                 // ≈ 0.6569
+
+  var sel = document.getElementById('unk');
+  var warn = document.getElementById('nojs');
+  if (warn) warn.style.display = 'none';
+
+  function fmt(x, d) {
+    var s = x.toFixed(d === undefined ? 2 : d);
+    return (x > 0 ? '+' : '') + s;
+  }
+  function pctErr(student, actual) { return (student - actual) / actual * 100; }
+
+  document.getElementById('f').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var out = document.getElementById('result');
+    var n = parseInt(sel.value, 10);
+    var vRaw = document.getElementById('val').value.trim();
+    var peRaw = document.getElementById('pe').value.trim();
+
+    if (!n) { out.innerHTML = msg('err', 'Select your unknown number.'); return; }
+    if (vRaw === '' || isNaN(parseFloat(vRaw))) {
+      out.innerHTML = msg('err', 'Enter your mass percent of Na<sub>2</sub>C<sub>2</sub>O<sub>4</sub> as a number.');
+      return;
+    }
+
+    var v = parseFloat(vRaw);
+    var actual = ACTUAL[n];
+    var err = pctErr(v, actual);
+    var absErr = Math.abs(err);
+    var cls = absErr <= 1 ? 'good' : absErr <= 5 ? 'ok' : 'bad';
+
+    var html =
+      '<div class="box">' +
+        '<div class="hint">Percent error</div>' +
+        '<div class="big ' + cls + '">' + fmt(err) + '%</div>' +
+        '<div class="row"><span>Your value</span><span>' + v + '%</span></div>' +
+        '<div class="row"><span>Actual value (Unknown ' + n + ')</span><span>' + actual.toFixed(2) + '%</span></div>' +
+        '<div class="row"><span>Your result is</span><span>' +
+          (err < 0 ? 'low' : err > 0 ? 'high' : 'exact') + '</span></div>' +
+        '<p class="hint" style="margin:10px 0 0">' +
+          'Percent error = (your value − actual value) / actual value × 100' +
+        '</p>' +
+      '</div>';
+
+    // Common error 1: reported % oxalate ion instead of % sodium oxalate
+    var ionEquiv = actual * ION_RATIO;
+    var errVsIon = pctErr(v, ionEquiv);
+    if (Math.abs(errVsIon) <= 5 && Math.abs(errVsIon) < absErr) {
+      var converted = v / ION_RATIO;
+      html += '<div class="box note">' +
+        '<h3>Check what you calculated</h3>' +
+        '<p>Your value is close to the mass percent of <strong>oxalate ion</strong> (C<sub>2</sub>O<sub>4</sub><sup>2−</sup>) in this unknown (' +
+          ionEquiv.toFixed(2) + '%). The question asks for the mass percent of <strong>sodium oxalate</strong> (Na<sub>2</sub>C<sub>2</sub>O<sub>4</sub>).</p>' +
+        '<p>Use the molar mass of Na<sub>2</sub>C<sub>2</sub>O<sub>4</sub> (' + MM_NA2C2O4.toFixed(2) +
+          ' g/mol) rather than C<sub>2</sub>O<sub>4</sub><sup>2−</sup> (' + MM_C2O4.toFixed(2) + ' g/mol). ' +
+          'Your value as % Na<sub>2</sub>C<sub>2</sub>O<sub>4</sub> would be about ' + converted.toFixed(2) +
+          '%, a percent error of ' + fmt(pctErr(converted, actual)) + '%.</p>' +
+      '</div>';
+    }
+
+    // Common error 2: student's own percent error (sign or value)
+    if (peRaw !== '') {
+      var pe = parseFloat(peRaw);
+      if (isNaN(pe)) {
+        html += msg('err', 'Your percent error should be a number.');
+      } else {
+        var tol = Math.max(0.1, 0.02 * absErr); // allow for rounding
+        if (Math.abs(pe - err) <= tol) {
+          html += '<div class="box note ok"><h3>Your percent error matches</h3>' +
+            '<p>You reported ' + fmt(pe) + '%, which matches ' + fmt(err) + '%.</p></div>';
+        } else if (Math.abs(Math.abs(pe) - absErr) <= tol && Math.sign(pe) !== Math.sign(err)) {
+          html += '<div class="box note"><h3>Check the sign</h3>' +
+            '<p>You reported ' + fmt(pe) + '%. The size is right, but your value is ' +
+            (err < 0 ? 'lower' : 'higher') + ' than the actual value, so the percent error is ' +
+            (err < 0 ? '<strong>negative</strong>' : '<strong>positive</strong>') + ': ' + fmt(err) + '%.</p></div>';
+        } else {
+          html += '<div class="box note"><h3>Your percent error differs</h3>' +
+            '<p>You reported ' + fmt(pe) + '%. Using your value of ' + v + '% and the actual value of ' +
+            actual.toFixed(2) + '%, the percent error is ' + fmt(err) + '%.</p></div>';
+        }
+      }
+    }
+
+    out.innerHTML = html;
+  });
+
+  function msg(kind, text) {
+    return '<div class="box note ' + kind + '"><p>' + text + '</p></div>';
+  }
+})();
+</script>
+</body>
+</html>
